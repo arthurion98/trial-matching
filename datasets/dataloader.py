@@ -15,7 +15,7 @@ class TrialDataset:
         areas,
         neurons,
         trial_type=[0, 1, 2, 3],
-        stim=[0, 1, 2, 3, 4],
+        stim=[0, 1, 2, 3, 4],  # (Tâm): 0: no stim, 1: stim, >=2: legacy
         reaction_time_limits=None,
         start=-1,
         stop=1,
@@ -49,7 +49,7 @@ class TrialDataset:
         self.timestep = timestep
         self.trial_onset = trial_onset
         assert start < 1 or start > -1, "start time out of limits"
-        assert stop < 1 or stop > -1, "stop time out of limits"
+        assert stop < 1 or stop > -1, "stop time out of limits"  # (Tâm): those checks are useless, for any stop/start one of the two term will be true
         assert start < stop, "stop should be bigger than start"
         self.start = int(np.round((start + self.trial_onset) / self.timestep))
         self.stop = int(np.round((stop + self.trial_onset) / self.timestep))
@@ -96,7 +96,7 @@ class TrialDataset:
             x, y = next(iter(sss.split(np.arange(trial_types.shape[0]), trial_types)))
             self.data_dict["train_ind"][sess] = x
             self.data_dict["test_ind"][sess] = y
-        self.data_dict["sessions"] = np.array(self.data_dict["sessions"])
+        self.data_dict["sessions"] = np.array(self.data_dict["sessions"])  # (Tâm): could simply have self.data_dict["sessions"] = np.array(sessions) (should already be numpy), instead of assigning entries in for loop
 
     def load_one_session(self, num_session, session):
         """Loads one session of data from the folder ./datasets to RAM in self.data_dict"""
@@ -140,7 +140,7 @@ class TrialDataset:
         spike_times = (np.concatenate(spike_times) // self.timestep).astype(int)
         spike_clusters = np.concatenate(spike_clusters).astype(int)
         data = np.ones_like(spike_clusters).astype(int)
-        raster = csr_matrix(
+        raster = csr_matrix(  # (Tâm): go from sparse array to dense array
             (data, (spike_times, spike_clusters)),
             (spike_times.max() + 1, spike_clusters.max() + 1),
         )
@@ -162,7 +162,7 @@ class TrialDataset:
         for i, trial_onset in enumerate(trial_onsets):
             start = int(np.round((trial_onset) / self.timestep)) + self.start
             stop = start + (self.stop - self.start)
-            if raster[start:stop].shape[0] < stop - start:
+            if raster[start:stop].shape[0] != stop - start:  # (Tâm): checking if slicing outside
                 break
             spikes[i] = raster[start:stop].toarray().T
             if self.with_behaviour:
@@ -204,7 +204,7 @@ class TrialDataset:
         """
         # if train = 0 (test set), 1 (train set), 2 (both)
         test_trials = [
-            len(np.isin(self.data_dict["trial_types"][i][j], trial_type))
+            len(np.isin(self.data_dict["trial_types"][i][j], trial_type))  # (Tâm): need to test, not sure the len thing is what we need
             for i, j in enumerate(self.data_dict["test_ind"])
         ]
         train_trials = [
@@ -218,7 +218,7 @@ class TrialDataset:
         else:
             return max(test_trials) + max(train_trials)
 
-    def to_torch(self, trial_types=[0, 1, 2, 3]):
+    def to_torch(self, trial_types=[0, 1, 2, 3]):  # (Tâm): perhaps doing double the work by having this load and restructure
         """Move to torch the data that where loaded with load_data
 
         Args:
@@ -250,7 +250,7 @@ class TrialDataset:
             self.session_info[2].append(self.data_dict["trial_active"][index][indices])
             self.session_info[3].append(self.data_dict["neurons"][index])
 
-            self.spikes_all[:, :trials, self.session_info[3][-1]] = spikes
+            self.spikes_all[:, :trials, self.session_info[3][-1]] = spikes  # (Tâm): why use :trials for a trials sized array?
             if self.with_behaviour:
                 self.jaw[:, :trials, i] = torch.tensor(
                     self.data_dict["behaviour"][index][indices, 1].T
@@ -285,10 +285,10 @@ class TrialDataset:
         Returns:
             [spikes, jaw, session_info]: _description_
         """
-        assert jaw_tongue in [1, 2], "wrong jaw_tongue value"
+        assert jaw_tongue in [1, 2], "wrong jaw_tongue value"  # (Tâm): at this point you should make it a boolean
         sessions = self.data_dict["sessions"]
         timefull, _, n_units = self.spikes_all.shape
-        max_trials = self.max_trials(train, trial_type=trial_type)
+        max_trials = self.max_trials(train, trial_type=trial_type)  # (Tâm): this is exactly the size you throw out at the step above
         spikes = torch.zeros(timefull, max_trials, n_units) * torch.nan
         jaw = None
         if self.with_behaviour:
@@ -298,7 +298,7 @@ class TrialDataset:
         new_session_info = [[] for i in range(len(self.session_info) - 1)]
         new_session_info.append(self.session_info[-1])
         for session in range(len(self.session_info[0])):
-            indices_train = np.zeros_like(self.session_info[0][session]) > 0
+            indices_train = np.zeros_like(self.session_info[0][session]) > 0  # (Tâm): so false everywhere?
             if train == 0:
                 indices_t = self.data_dict["test_ind"][session]
                 indices_train[indices_t] = True
@@ -320,7 +320,7 @@ class TrialDataset:
                     tmp = self.jaw[:, indices][..., session]
                 elif jaw_tongue == 2:
                     tmp = self.tongue[:, indices][..., session]
-                jaw[:, :trials, session] = tmp - tmp[: self.start].mean(0)
+                jaw[:, :trials, session] = tmp - tmp[: self.start].mean(0)  # (Tâm): didn't you normalize them already? Are you removing some starting baseline?
                 jaw = jaw.to(device)
             for i in range(len(self.session_info) - 1):
                 new_session_info[i].append(self.session_info[i][session][indices])

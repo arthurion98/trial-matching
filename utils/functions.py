@@ -73,7 +73,7 @@ def mse_2d(x, y):
     x = x.T.repeat(y.shape[-1], 1, 1).permute(2, 1, 0)
     y = y.T.repeat(x.shape[-2], 1, 1).permute(2, 0, 1)
 
-    return ((x - y) ** 2).mean(0)
+    return ((x - y) ** 2).mean(0)  # don't know if it's fully efficient for large matrices, since you do computations twice
 
 
 def mse_2dv2(x, y):
@@ -366,7 +366,7 @@ def trial_type_perc(session_info, num_trial_types=2):
 
 def trial_metric(
     filt_train,
-    filt_test,
+    filt_test,  # (Tâm): name is slightly inconsistent with your usage as model vs real data; makes it very confusing on why we are matching
     filt_jaw_train,
     filt_jaw_test,
     session_info,
@@ -416,10 +416,10 @@ def trial_metric(
             pop_train = pop_train[:, keepx]
             pop_test = pop_test[:, ytox]
         else:
-            keep = min(pop_train.shape[1], pop_test.shape[1])
-            keep_train = torch.randperm(pop_train.shape[1])[:keep]
-            keep_test = torch.randperm(pop_test.shape[1])[:keep]
-            pop_train, pop_test = pop_train[:, keep_train], pop_test[:, keep_test]
+            keep = min(pop_train.shape[1], pop_test.shape[1])  # (Tâm): you already did this step at line 409, they should be the same size
+            keep_train = torch.randperm(pop_train.shape[1])[:keep] # idem
+            keep_test = torch.randperm(pop_test.shape[1])[:keep] # idem
+            pop_train, pop_test = pop_train[:, keep_train], pop_test[:, keep_test] # idem
         metric.append(measure(pop_train.T, pop_test.T, dim=1))
     metric = np.concatenate(metric)
     return metric
@@ -471,7 +471,7 @@ def load_data(model):
     (
         data_spikes_train,
         data_jaw_train,
-        session_info_train,
+        session_info_train,  # (Tâm): store session-stitching info
     ) = dataset.get_train_trial_type(
         train=1, device=opt.device, jaw_tongue=opt.jaw_tongue
     )

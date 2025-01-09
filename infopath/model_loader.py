@@ -21,7 +21,7 @@ class FullModel(nn.Module):
         self.rsnn = init_rsnn(opt)
         self.input_spikes = InputSpikes(opt, opt.input_seed)
         start, stop = self.opt.start, self.opt.stop
-        self.opt.start, self.opt.stop = 0.0, 0.3
+        self.opt.start, self.opt.stop = 0.0, 0.3  # (Tâm): setting up the pre-trial stimulations for reaching steady-state
         self.input_spikes_pre = InputSpikes(copy.deepcopy(opt), opt.input_seed)
         self.opt.start, self.opt.stop = start, stop
         self.timestep = self.opt.dt * 0.001
@@ -101,7 +101,7 @@ class FullModel(nn.Module):
         _, _, _, state = self.rsnn(
             spike_data, state, sample_trial_noise=sample_trial_noise
         )
-        return state
+        return state  # (Tâm): shouldn't we check before? you don't store or use spike_data if state is not None
 
     def step(self, input_spikes, state, mem_noise, start=None, stop=None):
         opt = self.opt
@@ -185,11 +185,11 @@ class FullModel(nn.Module):
             netD (torch.nn.Module, None): _description_
 
         Returns:
-            torch.float: Total loss
+            torch.float: Total loss  # (Tâm): not anymore
         """
         count_tasks = 0  # useful for the the loss_splitter
         if self.opt.with_task_splitter:
-            model_spikes_list = self.multi_task_splitter(model_spikes)
+            model_spikes_list = self.multi_task_splitter(model_spikes)  # (Tâm): scale correctly different losses
         else:
             model_spikes_list = [model_spikes]
         opt = self.opt
@@ -275,7 +275,7 @@ class FullModel(nn.Module):
                 data_jaw,
                 model_jaw,
             )
-        firing_rate_loss = opt.coeff_firing_rate_distro_reg * fr_loss
+        firing_rate_loss = opt.coeff_firing_rate_distro_reg * fr_loss  # (Tâm): could rewrite it to match the other
         trial_loss *= opt.coeff_trial_loss
         neur_loss *= opt.coeff_loss
         cross_corr_loss *= opt.coeff_cross_corr_loss
@@ -287,7 +287,7 @@ class FullModel(nn.Module):
             device = self.opt.device
             activity = self.filter_fun1(activity.to(device)).cpu()
             if clusters is None:
-                clusters = torch.arange(activity.shape[2]) > 0
+                clusters = torch.arange(activity.shape[2]) > 0  # (Tâm): wouldn't it be easier to just do torch.ones(-.shape[2])? you just want an array with true everywhere right?
             step = self.timestep
             activity = activity[..., clusters]
             exc_index = self.rsnn.excitatory_index[clusters]
@@ -298,7 +298,7 @@ class FullModel(nn.Module):
                 exc_mask = exc_index & area_index
                 exc_mask = exc_mask.cpu()
                 simulation_exc = (
-                    np.nanmean(activity[..., exc_mask].cpu(), (1, 2)) / step
+                    np.nanmean(activity[..., exc_mask].cpu(), (1, 2)) / step  # (Tâm): why divide by step?
                 )
                 mean_exc.append(simulation_exc)
                 inh_index = ~exc_index

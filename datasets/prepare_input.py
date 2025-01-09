@@ -28,10 +28,10 @@ class InputSpikes(nn.Module):
         firing_prob = self.opt.input_f0 * dt_in_seconds
         batch_size = stim.shape[0]
         pattern = (
-            torch.ones((start + stop, batch_size, n_neurons), device=stim.device)
+            torch.ones((start + stop, batch_size, n_neurons), device=stim.device)  # (Tâm): start is flipped above, hence we're effectively doing stop - start, which makes sense
             * firing_prob
         )
-        pattern[pattern > 1] = 1
+        pattern[pattern > 1] = 1  # (Tâm): would be simpler to check if firing_prob > 1 and change it once.
         n_stim = int(n_neurons * self.p_stim / len(self.opt.stim_onsets))
         for i, j in enumerate(stim):
             for l, k in enumerate(self.opt.stim_onsets):
@@ -42,11 +42,11 @@ class InputSpikes(nn.Module):
                 pattern[
                     start + thalamic_delay : start + thalamic_delay + stim_dur,
                     i,
-                    n_stim * l : n_stim * (l + 1),
+                    n_stim * l : n_stim * (l + 1),  # (Tâm): why do you target batch of neurons one after another in case of multiple stimulus onsets?
                 ] *= (
                     1 + self.opt.stim_valance * scale
                 )
-        pattern[pattern > 1] = 1
+        pattern[pattern > 1] = 1  # (Tâm): idem can check at the 'stim_valance * scale' level
         if n_neurons == 2:
-            return (pattern > firing_prob) * 1.0
+            return (pattern > firing_prob) * 1.0  # (Tâm): what is that?
         return torch.bernoulli(pattern)

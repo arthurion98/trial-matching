@@ -8,7 +8,7 @@ def post_synaptic_weight(thetas, p_exc):
     inh = thetas[:, n_e:]
     exc_sum = exc.sum(1)
     inh_sum = inh.sum(1)
-    exc = torch.where(inh_sum > exc_sum, exc.T, exc.T * inh_sum / exc_sum).T
+    exc = torch.where(inh_sum > exc_sum, exc.T, exc.T * inh_sum / exc_sum).T  # (Tâm) balance ext and inh strength
     inh = torch.where(inh_sum < exc_sum, inh.T, inh.T * exc_sum / inh_sum).T
     return torch.cat((exc, inh), dim=1)
 

@@ -182,7 +182,7 @@ class RSNN(nn.Module):
             self.conv = torch.nn.Conv1d(
                 1, self.n_units, kernel_size=self.jaw_kernel, bias=False
             )
-            self._w_jaw_pre.data *= 10
+            self._w_jaw_pre.data *= 10  # (Tâm) magic number
             self.conv.weight.data = self._w_jaw_post[None].permute(2, 0, 1)
 
         # make input weight matrix
@@ -193,7 +193,7 @@ class RSNN(nn.Module):
         # make reccurent weight matrix
         self.rec_groups = rec_groups
         weights, mask = [], []
-        for i in range(self.rec_groups):
+        for i in range(self.rec_groups):  # (Tâm): allow for multiple synapses per neuron, typically with different delays
             (
                 weights_rec,
                 mask_rec,
@@ -215,7 +215,7 @@ class RSNN(nn.Module):
         # adaptive neurons
         tau_adapt = tau_adaptation * torch.ones(self.n_units)
         if train_adaptation:
-            betalist = beta * torch.zeros(self.n_units)
+            betalist = torch.zeros(self.n_units)
             self.beta = Parameter(betalist)
         else:
             betalist = beta * (prop_adaptive > torch.rand(self.n_units))
@@ -324,7 +324,7 @@ class RSNN(nn.Module):
             np.random.choice([0, 1], [n_i, n_inp], p=[1 - p_inpi, p_inpi]),
         )
         total_mask = torch.cat([mask_inpe, mask_inpi])
-        weights = torch.rand(n_all, n_inp).abs() / (n_inp**0.5)
+        weights = torch.rand(n_all, n_inp) / (n_inp**0.5)
         weights = weights * total_mask
         if p_exc != 1:
             weights = post_synaptic_weight(weights, p_exc)
@@ -386,7 +386,7 @@ class RSNN(nn.Module):
             thetas = torch.rand(self.n_units, self.n_units)
         thetas = thetas * total_mask
         thetas = post_synaptic_weight(thetas, self.p_exc)
-        thetas = divide_max_eig(thetas, self.p_exc)
+        thetas = divide_max_eig(thetas, self.p_exc)  # (Tâm): prevent eigenvalues from lying outside the unit disk, and hence leading to amplification within recurrent network
 
         return thetas, total_mask, mask_inter_inh_exc, (bounds, conn_per_bound)
 
@@ -424,7 +424,7 @@ class RSNN(nn.Module):
         w_in[w_in < 0] = 1e-12
         self._w_in.data = w_in
 
-    def reform_w_jaw(self, lr, l1_norm_mult=0.01):
+    def reform_w_jaw(self, lr, l1_norm_mult=0.01):  # (Tâm): why is this one not used?
         w_jaw = self._w_jaw.clone() - l1_norm_mult * lr
         w_jaw[w_jaw < 0] = 1e-12
         self._w_jaw.data = w_jaw
@@ -434,32 +434,32 @@ class RSNN(nn.Module):
     ):
         # mask_rec_orig if 1 don't change if 0 might get triggered to change
         # maybe we add here a noise term
-        w_rec_orig.data = w_rec_orig.clone() - l1_norm_mult * lr
+        w_rec_orig.data = w_rec_orig.clone() - l1_norm_mult * lr  # (Tâm): why this weight decay? avoid weights staying small but still active
         # this is to remove inter inh->exc synapses
         w_rec_orig.data[~(self.mask_inter_inh_exc > 0)] = (
             w_rec_orig.data[~(self.mask_inter_inh_exc > 0)] - lr
         )
-        w_rec = w_rec_orig.clone() * mask_rec_orig  # keep the previous active ones
+        w_rec = w_rec_orig.clone() * mask_rec_orig  # keep the previous active ones  # (Tâm): so here you lose new synapses that want to form?
         if extra_mask != None:
             w_rec *= 1 - extra_mask  # keep the previous active ones
         switched = w_rec < 0  # find synapses that switched
         w_rec[switched] = 0  # make them retracted
         mask_rec_orig[switched] = 0  # and also change the mask
         # use this trick so the diagonal is never updated
-        mask_rec_orig += self.mask_self_exc
+        mask_rec_orig += self.mask_self_exc  # (Tâm): couldn't find the init? is it simply an identity mask?
         mask_rec_orig += 1 - self.mask_inter_inh_exc
         if extra_mask != None:
             mask_rec_orig += extra_mask  # here we can add one more mask of neurons that we don't want to touch
 
         dormant_mask = torch.zeros_like(mask_rec_orig).clone()
-        random_mat = torch.ones_like(w_rec) * 1e-12
+        random_mat = torch.ones_like(w_rec) * 1e-12  # (Tâm): it's not random
         for i, ((istart, jstart), (iend, jend)) in enumerate(self.bounds_rec[0]):
             count_sub = (w_rec[istart:iend, jstart:jend] != 0).sum().float()
             # if true there are less than K dormant, here K is symbolic
-            if not torch.eq(count_sub, self.bounds_rec[1][i]):
+            if not torch.eq(count_sub, self.bounds_rec[1][i]):  # (Tâm): birth new connections to preserve connection count
                 to_awake = (self.bounds_rec[1][i] - count_sub).int()
                 to_turn_cand = torch.where(
-                    torch.logical_not(mask_rec_orig[istart:iend, jstart:jend])
+                    torch.logical_not(mask_rec_orig[istart:iend, jstart:jend])  # (Tâm): so we are basically including retracted synapses in the new possible synapse pool?
                 )
                 shuffle_cand = (
                     torch.randperm(to_turn_cand[0].shape[0])
@@ -482,7 +482,7 @@ class RSNN(nn.Module):
         z_forward = (x > 0).float()
 
         z_backward = torch.where(
-            x > 0, -0.5 * torch.square(x - 1), 0.5 * torch.square(x + 1)
+            x > 0, -0.5 * torch.square(x - 1), 0.5 * torch.square(x + 1)  # (Tâm): surrogate gradient looks weird but for the derivative to be piece-wise linear (1-abs(x))
         )
         z_backward = torch.where(torch.abs(x) < 1, z_backward, torch.zeros_like(x))
         z_backward = self.dampening_factor * z_backward
@@ -497,7 +497,7 @@ class RSNN(nn.Module):
         z_forward = (torch.rand_like(logit) < z_backward).float()
         # z_forward = torch.bernoulli(z_backward)
         z_backward = z_backward * self.dampening_factor
-        z = (z_forward - z_backward).detach() + z_backward
+        z = (z_forward - z_backward).detach() + z_backward  # (Tâm): surrogate gradient
         return z
 
     def prepare_currents(self, spike_buffer, rand_syn_trans=1):
@@ -526,13 +526,9 @@ class RSNN(nn.Module):
     def refractoriness(self, z, ref):
         if self.n_refractory >= 1:
             is_ref = ref > 0
-            z = torch.where(is_ref, torch.zeros_like(z), z)
-            new_ref = torch.where(ref > 0, ref - 1, ref)
-            new_ref = torch.where(
-                z > 0,
-                torch.tensor(self.n_refractory).to(z.device),
-                new_ref,
-            )
+            z = torch.where(is_ref, 0, z)
+            new_ref = torch.where(ref > 0, ref - 1, 0)
+            new_ref = torch.where(z > 0, self.n_refractory, new_ref)
         else:
             new_ref = ref
         return new_ref, z
@@ -560,7 +556,7 @@ class RSNN(nn.Module):
             self.sample_mem_noise(input.shape[0], input.shape[1])
         if sample_trial_noise:
             self.sample_trial_noise(input.shape[1])
-        if self.latent_new:
+        if self.latent_new:  # (Tâm): should probably belong to the check for sample_trial_noise
             self.trial_noise_ready = self.lin1_tr_offset(
                 torch.relu(self.lin_tr_offset(self.trial_noise))
             )
@@ -583,13 +579,13 @@ class RSNN(nn.Module):
         inp_cur_exc = inp_cur_exc + light
         mem_noise = self.mem_noise.clone() * self.bias
         if seed is not None:
-            torch.manual_seed(seed)
+            torch.manual_seed(seed)  # (Tâm): shouldn't we set the seed before sampling initial state and mem_noise?
         spike_list = []
         voltage_list = []
         jaw_list = []
         z = spike_buffer[-1]
         self.thr = self.thr0 - self.v_rest
-        self.thr_rest_diff = self.thr0 - self.v_rest
+        self.thr_rest_diff = self.thr0 - self.v_rest # (Tâm): those two are exactly the same
         self.thr_rest_diff0 = self.thr0 - self.v_rest
         self.E_exc = self.v_rest0 + (self.thr_rest_diff0) * 2
         self.E_inh = self.v_rest0 - (self.thr_rest_diff0)
@@ -624,9 +620,9 @@ class RSNN(nn.Module):
     def step(self, rec_cur, inp_cur, z, v, ref, b, mem_noise):
         b = self.decay_b * b + (1 - self.decay_b) * z
         thr = self.thr0 + b * self.beta
-        # don't allw v_rest to go above threshold
-        if (thr <= self.v_rest).any():
-            thr[thr <= self.v_rest] += 0.001
+        # don't allow v_rest to go above threshold
+        thr = thr.clamp(self.v_rest + 0.001)  # (Tâm): we are technically raising thr, not clamping down v_rest, is this what we want?
+        # thr[thr <= self.v_rest] += 0.001  # (Tâm): old version
         if self.conductance_based:
             exc_cur = (
                 (self.E_exc - v)
@@ -643,8 +639,8 @@ class RSNN(nn.Module):
             inh_cur = -(inp_cur[1] + rec_cur[1])
         if torch.isnan(v).sum() > 0:
             print("Network exploded")
-        currents = (exc_cur + inh_cur) / 2
-        if self.motor_areas.shape[0] > 0 and not self.jaw_open_loop:
+        currents = (exc_cur + inh_cur) / 2  # (Tâm): legacy magic number
+        if  not self.jaw_open_loop and self.motor_areas.shape[0] > 0:
             currents += rec_cur[2] / 2
         if self.train_noise_bias:
             mem_noise *= self.thr_rest_diff0 * self._sigma_mem_noise * self.dt**0.5
@@ -659,21 +655,21 @@ class RSNN(nn.Module):
         z = self.spike_fun((v - thr) / (thr - self.v_rest0))
         logits = self.temperature * (v.clone() - thr) / (thr - self.v_rest0)
         if not self.spike_fun_type == "sigmoid":
-            logits = torch.where(ref > 0, torch.ones_like(logits) * -10, logits)
+            logits = torch.where(ref > 0, -10, logits)
             ref, z = self.refractoriness(z, ref)
-            v -= (thr - self.v_rest) * z
+            v -= (thr - self.v_rest) * z  # (Tâm): could consider with subgradient a reset, but it would be a pain
         return z, v, ref, b, logits
 
     def step_jaw(self, z, jaw_buffer):
         if self.motor_areas.shape[0] > 0:
-            inp = z[:, :, self.motor_area_index] / 2
+            inp = z[:, :, self.motor_area_index] / 2  # (Tâm): legacy magic number
             inp = inp @ self._w_jaw_pre
             jpre = jaw_buffer[-1]
-            if self.scaling_jaw_in_model:
-                jpre = torch.log(jpre + self.jaw_bias)
+            # if self.scaling_jaw_in_model:
+            #     jpre = torch.log(jpre + self.jaw_bias)
             j = self.decay_jaw * jpre + (1 - self.decay_jaw) * inp
-            if self.scaling_jaw_in_model:
-                j = torch.exp(j) - self.jaw_bias
+            # if self.scaling_jaw_in_model:
+            #     j = torch.exp(j) - self.jaw_bias
             jaw_buffer = torch.cat([jaw_buffer[1:], j])
         return jaw_buffer
 
@@ -706,20 +702,21 @@ class RSNN(nn.Module):
             )
             self._w_rec[g].data.copy_(weight.data)
             self.mask_rec[g].data.copy_(mask.data)
-            self.mask_rec.data.copy_(mask.data)
+            # self.mask_rec.data.copy_(mask.data)  # (Tâm): aren't you overwriting data here?
         self.reform_w_in(lr, l1_norm_mult=l1_decay)
         self.beta[self.beta < 0] = 0
 
     def reform_v_rest(self, v_rest_bound=False):
-        v = self.v_rest.data
+        v = self.v_rest.data  # (Tâm): so v_rest is trained? is it biologically realistic, or should we see it as raised by some hidden pop seen as a field?
         v0 = self.v_rest0
         t = self.thr0
         # don't allow v_rest to be far away (20% of (t-v0)) from the initial value (v0)
-        if v_rest_bound:
-            self.v_rest.data[v > v0 + (t - v0) * 0.2] = v0 + (t - v0) * 0.2
-            self.v_rest.data[v < v0 - (t - v0) * 0.2] = v0 - (t - v0) * 0.2
+        if v_rest_bound:  # (Tâm): could use torch clamp
+            self.v_rest.data = self.v_rest.data.clamp(v0 - (t-v0) * 0.2, v0 + (t-v0) * 0.2)
+            # self.v_rest.data[v > v0 + (t - v0) * 0.2] = v0 + (t - v0) * 0.2
+            # self.v_rest.data[v < v0 - (t - v0) * 0.2] = v0 - (t - v0) * 0.2
         else:
-            self.v_rest.data[v > t] = self.thr0
+            self.v_rest.data[v > t] = self.thr0 # should be - epsilon
             self.v_rest.data[self.v_rest < 2 * self.v_rest0 - self.thr0] = (
                 2 * self.v_rest0 - self.thr0
             )

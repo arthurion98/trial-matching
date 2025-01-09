@@ -19,7 +19,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
     early_stop, accuracy, previous_test_loss, t_trial_pearson_model = (
         0,
         torch.zeros(1),
-        1000,
+        1000,  # (Tâm): could be safer to set it to np.infinity
         0,
     )
     to_save_lists = {
@@ -66,7 +66,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
             session_info_test,
             opt.device,
         )
-    t_trial_pearson_data = t_trial_pearson(
+    t_trial_pearson_data = t_trial_pearson(  # (Tâm): what does it mean to compute the pearson correlation between train and test? Wouldn't you expect both of them to come from the same distr?
         model.filter_fun1(train_spikes),
         model.filter_fun1(test_spikes),
         model.filter_fun1(filt_jaw_train),
@@ -84,7 +84,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
     while step < opt.n_steps:
         step += 1
         # prepare data for stimulus condition, loop with all, only stim, only no stim
-        index = step % len(stim_cond)
+        index = step % len(stim_cond)  # (Tâm): is there any specific reason to loop over stim cond.? (heuristics, not used anymore)
         data_spikes, data_jaw, session_info = isolate_step_data(
             train_spikes,
             train_jaw,
@@ -96,7 +96,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
             opt.balance_trial_types,
         )
         torch.cuda.empty_cache()
-        torch.manual_seed(step)
+        torch.manual_seed(step)  # (Tâm): not the best idea to change seed midway through : problem with cross compatibility with torch => need to be careful
         all_stims = np.concatenate([stims for stims in session_info[1]])
         stims = all_stims[torch.randint(all_stims.shape[0], size=(opt.batch_size,))]
         stims = torch.tensor(stims, device=opt.device)
@@ -127,12 +127,12 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
         )
         total_train_loss.backward()
         optimizerG.step()
-        with torch.no_grad():
+        with torch.no_grad():  # (Tâm): this should be understood as a projection on the constraints
             model.rsnn.reform_recurent(opt.lr, l1_decay=opt.l1_decay)
             model.rsnn.reform_v_rest()
 
         # Train Discriminator
-        if step % 5 == 0 and opt.gan_loss:
+        if opt.gan_loss and step % 5 == 0:  # (Tâm): better to exchange the checks
             optimizerD.zero_grad()
             if opt.t_trial_gan:
                 model_spikes_gan = model.filter_fun2(model.filter_fun1(model_spikes))
@@ -174,7 +174,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
             if opt.loss_trial_matched_mle:
                 loss_str += f" | tm_mle_loss {tm_mle_loss:.2f}"
             print("step", step, " ", loss_str)
-            if step % (10 - (10 % len(stim_cond))) == 0:
+            if step % (10 - (10 % len(stim_cond))) == 0:  # (Tâm): force to print in a multiple of len(stim_cond) smaller than 10 but as high as possible
                 with torch.no_grad():
                     t_trial_pearson_model = t_trial_pearson(
                         model.filter_fun1(data_spikes),
@@ -192,7 +192,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
         to_save_lists["fr_loss"].append(float(fr_loss))
         to_save_lists["cross_corr_loss"].append(float(cross_corr_loss))
         to_save_lists["tm_mle_loss"].append(float(tm_mle_loss))
-        if t_trial_pearson_model != 0:
+        if t_trial_pearson_model != 0:  # (Tâm): computed once every few step and copy-pasted in-between
             to_save_lists["t_trial_pearson"].append(float(t_trial_pearson_model))
 
         if (
@@ -201,7 +201,7 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
         ):
             torch.cuda.empty_cache()
             with torch.no_grad():
-                torch.manual_seed(step)
+                torch.manual_seed(step)  # (Tâm): not sure it's a good idea
                 state = model.steady_state()
                 input_spikes = model.input_spikes(stims)
                 model.rsnn.sample_mem_noise(
@@ -263,15 +263,15 @@ def train(opt, model, netD, optimizerG, optimizerD, step=-1):
                 step,
                 [activity_figure],
             )
-            for key in to_save_lists.keys():
+            for key in to_save_lists.keys():  # (Tâm): why not just re-init the dic? to_save_lists = {}
                 to_save_lists[key] = []
-            if results["total_train_loss"][-1] > previous_test_loss:
+            if results["total_train_loss"][-1] > previous_test_loss: # (Tâm): using train loss due to test loss being too variable with small size; not ideal
                 if early_stop > opt.early_stop:
                     print("probably pointless to continue so I stop myself")
                     print("So long, and thanks for the fish")
                     return -1
             else:
-                previous_test_loss = results["total_train_loss"][-1]
+                previous_test_loss = results["total_train_loss"][-1]  # (Tâm): it's actually the min loss so it's fine!
                 early_stop = 0
             torch.cuda.empty_cache()
         early_stop += 1
@@ -326,7 +326,7 @@ def prepare_plot(
     mean_signals = []
     for tr_type in opt.trial_types:
         data_spikes_trty = test_hit_miss(data_spikes, session_info, trial_type=tr_type)
-        exc, _ = model.mean_activity(data_spikes_trty)
+        exc, _ = model.mean_activity(data_spikes_trty)  # (Tâm): why throw out inh mean signals? for sake of plotting
         mean_signals.append(exc)
 
     for tr_type in opt.trial_types:
@@ -334,12 +334,12 @@ def prepare_plot(
             # plot zeros if the model predict nothing for that trial type
             signal = [np.zeros_like(sig) for sig in mean_signals[0]]
         else:
-            signal, _ = model.mean_activity(model_spikes[:, trial_type == tr_type])
+            signal, _ = model.mean_activity(model_spikes[:, trial_type == tr_type])  # (Tâm): idem
         mean_signals.append(signal)
 
     firing_rates_target = model.firing_rate
     # calculating the baseline firing rate
-    firing_rates = model_spikes[: model.trial_onset].mean(0).mean(0) / model.timestep
+    firing_rates = model_spikes[: model.trial_onset].mean(0).mean(0) / model.timestep  # (Tâm): amount to the base firing rate per neuron
 
     activity_figure, _ = plot_rsnn_activity(
         input=input_spikes[:, -1, :].cpu().numpy(),

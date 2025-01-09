@@ -25,7 +25,7 @@ def build_network(
         clusterdf = clusterdf[clusterdf["with_video"] == with_video]
     clusterdf = clusterdf[clusterdf["area"].isin(area_list)]
     # keep neurons with less than 40 Hz
-    clusterdf = clusterdf[clusterdf.firing_rate < 40]
+    # clusterdf = clusterdf[clusterdf.firing_rate < 40]  # (Tâm): why?
 
     n_neurons = rsnn.n_units
     # init of the output arrays
@@ -37,7 +37,7 @@ def build_network(
     # order sessions based on the number of neurons they have
     # this prioritize sessions with more neurons
     sessions_uniq = clusterdf.session.value_counts().index.values
-    sess_exc = [sessions_uniq.copy() for area in area_list]
+    sess_exc = [sessions_uniq.copy() for area in area_list]  # (Tâm): not sure I see the point?
     sess_inh = [sessions_uniq.copy() for area in area_list]
     # in this loop we make the matching from recordings to simulations
     for i in range(n_neurons):
@@ -51,7 +51,7 @@ def build_network(
             & (clusterdf["session"] == cur_session[0])
         ]
         # making sure that we use all neurons from a session and then move to the next session
-        while possible_ids.shape[0] == 0 and area != "Nope":
+        while possible_ids.shape[0] == 0 and area != "Nope":  # (Tâm): "Nope" is an "area" for hidden neurons
             cur_session = cur_session[1:]
             possible_ids = clusterdf[
                 (clusterdf["area"] == area)
@@ -81,7 +81,7 @@ def build_network(
             firing_rate[i] = clusterdfwhole.firing_rate[
                 clusterdfwhole.index == index
             ].values
-        else:
+        else:  # (Tâm): possibly a better way to do it than one at a time
             # from the possible neurons pick one
             index = np.random.choice(possible_ids.index)
             neuron_index[i] = clusterdf.cluster_index[clusterdf.index == index].values

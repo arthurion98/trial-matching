@@ -121,7 +121,7 @@ def z_score_norm(data_signal, model_signal, dim=1):
     model_meandim = model_signal.nanmean(dim)
     mean = data_meandim.mean(0)
     std = data_meandim.std(0)
-    std[std < 0.001] = 1
+    std[std < 0.001] = 1  # (Tâm): not convinced by that, shouldn't you correct it with some ceiling function?
     model_meandim = (model_meandim - mean) / std
     data_meandim = (data_meandim - mean) / std
     return model_meandim, data_meandim

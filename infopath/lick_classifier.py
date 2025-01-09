@@ -26,7 +26,7 @@ def prepare_classifier(
     device,
     remove_mean=False,
 ):
-    torch.manual_seed(0)
+    torch.manual_seed(0)  # (Tâm): should probably be a param
     lick_classifier = Lick_Classifier(filt_jaw_train.shape[0], 128)
     optimizer = torch.optim.AdamW(
         lick_classifier.parameters(), lr=1e-4, weight_decay=0.1
@@ -42,12 +42,12 @@ def prepare_classifier(
             inputs = filt_jaw_train[:, :, session].T
             trials = ~torch.isnan(inputs.sum(1))
             inputs = inputs[trials]
-            if remove_mean:
+            if remove_mean:  # (Tâm): magic number to get baseline mean and std
                 mean = inputs[:, :20].mean()
                 std = inputs[:, :20].std()
                 inputs = (inputs - mean) / std
             labels = torch.tensor(np.isin(session_info_train[0][session], [1, 3])) * 1.0
-            labels = labels.to(device)[: trials.sum()]
+            labels = labels.to(device)[: trials.sum()]  # (Tâm): wait, here you are not applying the same trials mask to the data?! Wouldn't it just return some random labels
 
             input_test = filt_jaw_test[:, :, session].T
             trials = ~torch.isnan(input_test.sum(1))
@@ -57,14 +57,14 @@ def prepare_classifier(
             labels_test = (
                 torch.tensor(np.isin(session_info_test[0][session], [1, 3])) * 1.0
             )
-            labels_test = labels_test.to(device)[: trials.sum()]
+            labels_test = labels_test.to(device)[: trials.sum()]  # (Tâm): idem
 
             output = lick_classifier(inputs).flatten()
             loss = torch.nn.BCELoss()(output, labels)
             loss.backward()
             optimizer.step()
             acc += (((output > 0.5) == labels) * 1.0).mean()
-            gt += max(labels.mean(), 1 - labels.mean())
+            gt += max(labels.mean(), 1 - labels.mean())  # (Tâm): trivial constant classifier would be maximal if it chose the most present class, then trivial accuracy is gt
             output_test = lick_classifier(input_test).flatten()
             test_acc += (((output_test > 0.5) == labels_test) * 1.0).mean()
         pbar.set_postfix_str(f"test_accuracy {test_acc.item()/num_session:.3f}")

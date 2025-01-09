@@ -3,6 +3,8 @@ from torch import nn
 import numpy as np
 
 
+# (Tâm): check the repo for update on multitask split (Bellec)
+
 class MultiTaskSplitterFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, z, num_copies: int, symmetric: bool):
@@ -62,7 +64,7 @@ class MultiTaskSplitter(nn.Module):
                 perm = torch.arange(num_copies)
 
         # When we can this for a list, it returns a tuple of list
-        if isinstance(x, dict):
+        if isinstance(x, dict):  # (Tâm): cool recursive writing, but is it really efficient?
             res_as_list = self.forward(list(x.values()), perm)
             res_as_dicts = [{} for _ in range(num_copies)]
             for j in range(num_copies):

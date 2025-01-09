@@ -263,7 +263,7 @@ class PseudoData:
                 rates = area1_t * (areas == "area1") + area2_t * (areas == "area2")
                 rates *= cluster.firing_rate.values
                 threshold = np.random.rand(rates.shape[0], rates.shape[1])
-                spikes = (rates * self.timestep / 1000) > threshold
+                spikes = (rates * self.timestep / 1000) > threshold # (Tâm) Why?
                 spike_tms, spike_neurons = np.where(spikes)
                 for n in range(len(spike_times)):
                     spike_times[n] += (
@@ -318,7 +318,8 @@ if __name__ == "__main__":
     }
     for i in [8]:
         conf["onsets"][1] = i
-        path = f"datasets/PseudoData_v16_variation1ms"
+        local_folder = "C:/Users/arthu/Desktop/PHD/projects/trial-matching"
+        path = f"{local_folder}/datasets/PseudoData_v16_variation1ms"
         pseudo_data = PseudoData(
             path,
             variation=conf["variation"],
@@ -351,7 +352,7 @@ if __name__ == "__main__":
     }
     for i in [20, 200]:
         conf["onsets"][1] = i
-        path = f"datasets/PseudoData_v17_delay{conf['onsets'][1]}_onesession"
+        path = f"{local_folder}/datasets/PseudoData_v17_delay{conf['onsets'][1]}_onesession"
         pseudo_data = PseudoData(
             path,
             variation=conf["variation"],
