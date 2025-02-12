@@ -1,5 +1,6 @@
 .idea
 datasets/DataFrom*
+datasets/data_*
 datasets/PseudoData*
 datasets/spikeData_v9.mat
 **__pycache__**

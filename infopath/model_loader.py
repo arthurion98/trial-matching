@@ -120,7 +120,7 @@ class FullModel(nn.Module):
             model_jaw = (model_jaw - self.jaw_mean) / self.jaw_std
             if self.opt.jaw_nonlinear:
                 model_jaw = torch.exp(model_jaw) - 1
-        return spike_outputs, voltages, model_jaw, state
+        return spike_outputs, voltages, model_jaw, state, input_spikes
 
     def forward(self, stims, seed=None):
         if seed is not None:
